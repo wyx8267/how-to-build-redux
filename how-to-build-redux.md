@@ -2,7 +2,7 @@
 
 > p.s. 翻译粗糙，详见[原文](https://zapier.com/engineering/how-to-build-redux/)
 
-Redux是一个简单的库，可帮助您管理JavaScript应用的状态。尽管它有这种简单性，但在学习时还是很容易掉进兔子洞。我发现自己在解释Redux时，几乎总是从展示如何实现它开始。所以这就是我们要做的：从头开始构建实现有效的Redux。我们的实现不会涵盖所有细微差别，但我们将展示大部分的奥秘。
+Redux是一个简单的库，可帮助您管理JavaScript应用的状态。尽管它有这种简单性，但在学习时还是很容易掉进无底洞。我发现自己在解释Redux时，几乎总是从展示如何实现它开始。所以这就是我们要做的：从头开始构建实现有效的Redux。我们的实现不会涵盖所有细微差别，但我们将展示大部分的奥秘。
 
 请注意，从技术上讲，我们将构建Redux和React Redux。 多数情况下我们将Redux与React配合使用。但是，即使您将Redux与其他东西结合使用，此处的大多数内容仍然适用。
 
@@ -129,3 +129,151 @@ const SomeEvilComponent = () => {
 
 最后一点是迄今为止最糟糕的问题，也是选择Redux的主要原因。如果您想减少应用的复杂性，最好的办法（以我的观点）是限制更改state的方式和范围。Redux并不是解决其他问题的灵丹妙药，但由于对state更改做了限制，可能会减少其他问题。
 
+
+## Reducer
+
+那么Redux是如何提供这些限制并帮助您管理状态的呢？您可以从一个简单的函数开始，该函数接受当前状态state和一个操作action，并返回新状态。对于我们的笔记应用，如果我们提供一个添加笔记的动作，我们应该获得一个添加了新的笔记的新状态。
+
+```js
+const CREATE_NOTE = 'CREATE_NOTE';
+const UPDATE_NOTE = 'UPDATE_NOTE';
+
+const reducer = (state = initialState, action) => {
+  switch (action.type) {
+    case CREATE_NOTE:
+      return // 返回创建了新笔记的新的state
+    case UPDATE_NOTE:
+      return // 返回更新了笔记的新的state
+    default:
+      return state
+  }
+};
+```
+
+如果switch语句使您感到麻烦，则不必以这种方式编写reducer。可以使用一个对象，并将每个类型的键指向其对应的处理程序，如下所示：
+
+```js
+const handlers = {
+  [CREATE_NOTE]: (state, action) => {
+    return // 返回创建了新笔记的新的state
+  },
+  [UPDATE_NOTE]: (state, action) => {
+    return // 返回更新了笔记的新的state
+  }
+};
+
+const reducer = (state = initialState, action) => {
+  if (handlers[action.type]) {
+    return handlers[action.type](state, action);
+  }
+  return state;
+};
+```
+
+这部分并不太重要。reducer是你的函数，你可以用任何你想要的方式实现它。Redux真的不在乎。
+
+### Immutability（不可变性）
+
+Redux真正关心的是你的reducer是一个纯函数，意思是，你永远，永远，永远都不应该像这样去编写reducer：
+
+```js
+const reducer = (state = initialState, action) => {
+  switch (action.type) {
+    case CREATE_NOTE: {
+      // 不要直接修改STATE!!!
+      state.notes[state.nextNoteId] = {
+        id: state.nextNoteId,
+        content: ''
+      };
+      state.nextNoteId++;
+      return state;
+    }
+    case UPDATE_NOTE: {
+      // 不要直接修改STATE!!!
+      state.notes[action.id].content = action.content;
+      return state;
+    }
+    default:
+      return state;
+  }
+};
+```
+
+实际上，如果这样改变state，Redux根本就不会起作用。因为直接更改state后，状态对象的引用不会更新，因此应用的各个部分将无法正确更新。另外也无法使用某些Redux开发人员工具，因为这些工具会跟踪以前的state。如果您一直在改变当前的state对象，则无法回到以前的state。
+
+原则上，突变状态使得从可组合的部分构建reducer(以及应用程序的其他部分)变得更加困难。纯函数是可预测的，因为当给定相同的输入时，它们产生相同的输出。如果你养成了一种直接改变state的习惯，那么一切都完了。调用函数变得不确定。你必须把整个函数树记在脑子里。
+
+但是，这种可预测性是有代价的，特别是因为JavaScript本身并不支持不可变对象。在我们的示例中，将使用原生的JavaScript，这将增加一些额外的代码。如下是我们真正需要写这个reducer的方法：
+
+```js
+const reducer = (state = initialState, action) => {
+  switch (action.type) {
+    case CREATE_NOTE: {
+      const id = state.nextNoteId;
+      const newNote = {
+        id,
+        content: ''
+      };
+      return {
+        ...state,
+        nextNoteId: id + 1,
+        notes: {
+          ...state.notes,
+          [id]: newNote
+        }
+      };
+    }
+    case UPDATE_NOTE: {
+      const {id, content} = action;
+      const editedNote = {
+        ...state.notes[id],
+        content
+      };
+      return {
+        ...state,
+        notes: {
+          ...state.notes,
+          [id]: editedNote
+        }
+      };
+    }
+    default:
+      return state;
+  }
+};
+```
+
+我在这里使用展开语法（`...`），从技术上讲，这还不是ECMAScript的一部分（ES6：现在是了），但是可以肯定的是，这是很安全的选择。如果要避免使用非标准功能，则可以使用`Object.assign`。两种方法的概念相同：请勿更改state，而是创建状态和任何嵌套对象/数组的浅表副本。对于对象的任何不变的部分，我们仅引用现有的部分。如果我们仔细看一下这段代码：
+
+```js
+return {
+  ...state,
+  notes: {
+    ...state.notes,
+    [id]: editedNote
+  }
+};
+```
+
+我们仅更改`notes`属性，因此`state`的其他属性将保持完全相同。`...state`只是说要按原样重用那些现有属性。同样，在`notes`中，我们只更改正在编辑的一个笔记，属于`...state.notes`的其他数据将保持不变。这样我们可以利用`shouldComponentUpdate`或`PureComponent`。如果组件具有未更改的note作为props，则可以避免重新渲染。记住这一点，我们还必须避免这样编写reducer：
+
+```js
+const reducer = (state = initialState, action) => {
+  // Well, we avoid mutation, but still... DON'T DO THIS!
+  state = _.cloneDeep(state)
+  switch (action.type) {
+    // ...
+    case UPDATE_NOTE: {
+      // Hey, now I can do good old mutations.
+      state.notes[action.id].content = action.content;
+      return state;
+    }
+    default:
+      return state;
+  }
+};
+```
+
+这将返回简洁的处理state变化的代码，如果您这样做，在技术上是可行的，但您将忽略所有潜在的性能问题。每个对象和数组在每次状态变化时都将是全新的，所以任何依赖于这些对象和数组的组件都必须重新渲染，即使你实际上没有做任何变化。
+
+我们的不可变reducer绝对需要更多的思想和代码来完善。但是随着时间的推移，您会逐渐意识到状态更改功能是被隔离的并且易于测试。对于真正的应用，您可能需要使用`lodash-fp`或`Ramda`或`Immutable.js`之类的东西。在Zapier（原作者所属机构），我们使用了`immutability-helper`的变体，它非常简单。然而我仍要提醒你，这是一个很大的无底洞，我甚至开始以不同的方式来编写库。原生JS也很好，在强大的输入解决方案（例如`Flow`和`TypeScript`）中可能会更好地发挥作用。只要确保坚持使用较小的功能即可。这很像使用React做出的权衡：您可能会得到比同等jQuery解决方案更多的代码，但是每个组件的可预测性要高得多。
