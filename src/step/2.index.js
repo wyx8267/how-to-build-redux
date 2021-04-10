@@ -8,7 +8,6 @@ const initialState = {
   nextNoteId: 1,
   notes: {}
 };
-window.state = initialState;
 
 const reducer = (state = initialState, action) => {
   switch (action.type) {
@@ -46,44 +45,59 @@ const reducer = (state = initialState, action) => {
   }
 };
 
-const onAddNote = () => {
-  const id = window.state.nextNoteId;
-  window.state.notes[id] = {
-    id,
-    content: ''
-  };
-  window.state.nextNoteId++;
-  renderApp();
-};
+// const state0 = reducer(undefined, {
+//   type: CREATE_NOTE
+// });
+// console.log('state0', state0)
 
-const NoteApp = ({notes}) => (
-  <div>
-    <ul className="note-list">
-    {Object.keys(notes).map(id => (
-      <li className="note-list-item" key={id}>{id}</li>
-    ))}
-    </ul>
-    <button className="editor-button" onClick={onAddNote}>New Note</button>
-  </div>
-);
+// const state1  = reducer(state0, {
+//   type: UPDATE_NOTE,
+//   id: 1,
+//   content: 'Hello, world!'
+// });
+// console.log('state1', state1)
+
+const actions = [
+  {type: CREATE_NOTE},
+  {type: UPDATE_NOTE, id: 1, content: 'Hello, world!'}
+];
+
+const state = actions.reduce(reducer, undefined);
+console.log('state', state)
 
 const renderApp = () => {
   ReactDOM.render(
-    <NoteApp notes={window.state.notes}/>,
+    <pre>{JSON.stringify(state, null, 2)}</pre>,
     document.getElementById('root')
   );
 };
 
 renderApp();
 
-const state0 = reducer(undefined, {
-  type: CREATE_NOTE
-});
-console.log('state0', state0)
+// const onAddNote = () => {
+//   const id = window.state.nextNoteId;
+//   window.state.notes[id] = {
+//     id,
+//     content: ''
+//   };
+//   window.state.nextNoteId++;
+//   renderApp();
+// };
 
-const state1  = reducer(state0, {
-  type: UPDATE_NOTE,
-  id: 1,
-  content: 'Hello, world!'
-});
-console.log('state1', state1)
+// const NoteApp = ({notes}) => (
+//   <div>
+//     <ul className="note-list">
+//     {Object.keys(notes).map(id => (
+//       <li className="note-list-item" key={id}>{id}</li>
+//     ))}
+//     </ul>
+//     <button className="editor-button" onClick={onAddNote}>New Note</button>
+//   </div>
+// );
+
+// const renderApp = () => {
+//   ReactDOM.render(
+//     <NoteApp notes={window.state.notes}/>,
+//     document.getElementById('root')
+//   );
+// };

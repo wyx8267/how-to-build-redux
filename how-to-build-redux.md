@@ -327,3 +327,34 @@ const state1  = reducer(state0, {
 ```
 
 [在JSFiddle上查看](https://jsfiddle.net/justindeal/kLkjt4y3/37/)
+
+当然，Redux不会像这样继续创建更多变量，但是我们将尽快得到一个真正的实现。关键是，Redux的核心实际上只是您编写的一段代码，一个简单的函数，它接受上一个state，并执行一个action并返回下一个state。 为什么将该功能称为reducer？因为它将直接插入标准的`reduce`函数。
+
+```js
+const actions = [
+  {type: CREATE_NOTE},
+  {type: UPDATE_NOTE, id: 1, content: 'Hello, world!'}
+];
+
+const state = actions.reduce(reducer, undefined);
+```
+
+现在，`state`看起来与之前的`state1`相同：
+
+```js
+{
+  nextNoteId: 2,
+  notes: {
+    1: {
+      id: 1,
+      content: 'Hello, world!'
+    }
+  }
+}
+```
+
+尝试将新的action添加到我们的`action`数组中，并将它们添加到reducer中。
+
+[在JSFiddle上查看](https://jsfiddle.net/justindeal/edogdh33/13/)
+
+现在您可以理解为什么Redux将自己标榜为“ JavaScript应用的可预测状态容器”。因为输入相同的一组操作，最终都拥有相同的state。函数式编程万岁！如果您听说过Redux易重播的特性，大致就是这个意思。尽管开箱即用，但Redux不会保留actions。相反，只有一个变量指向state对象，并且我们不断更改该变量以指向下一个state。 这是您的应用中允许的一个重要突变，但是我们将在`store`内部控制该突变。
