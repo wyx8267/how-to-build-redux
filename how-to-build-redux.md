@@ -259,12 +259,12 @@ return {
 
 ```js
 const reducer = (state = initialState, action) => {
-  // Well, we avoid mutation, but still... DON'T DO THIS!
+  // 确实避免了变化，但还是……不要这样做！！！
   state = _.cloneDeep(state)
   switch (action.type) {
     // ...
     case UPDATE_NOTE: {
-      // Hey, now I can do good old mutations.
+      // 看，现在可以安全地更改旧state了
       state.notes[action.id].content = action.content;
       return state;
     }
@@ -277,3 +277,53 @@ const reducer = (state = initialState, action) => {
 这将返回简洁的处理state变化的代码，如果您这样做，在技术上是可行的，但您将忽略所有潜在的性能问题。每个对象和数组在每次状态变化时都将是全新的，所以任何依赖于这些对象和数组的组件都必须重新渲染，即使你实际上没有做任何变化。
 
 我们的不可变reducer绝对需要更多的思想和代码来完善。但是随着时间的推移，您会逐渐意识到状态更改功能是被隔离的并且易于测试。对于真正的应用，您可能需要使用`lodash-fp`或`Ramda`或`Immutable.js`之类的东西。在Zapier（原作者所属机构），我们使用了`immutability-helper`的变体，它非常简单。然而我仍要提醒你，这是一个很大的无底洞，我甚至开始以不同的方式来编写库。原生JS也很好，在强大的输入解决方案（例如`Flow`和`TypeScript`）中可能会更好地发挥作用。只要确保坚持使用较小的功能即可。这很像使用React做出的权衡：您可能会得到比同等jQuery解决方案更多的代码，但是每个组件的可预测性要高得多。
+
+### Using our Reducer
+
+让我们向reducer添加一个action，然后得到新的state
+
+```js
+const state0 = reducer(undefined, {
+  type: CREATE_NOTE
+});
+```
+
+现在的 `state0`：
+
+```js
+{
+  nextNoteId: 2,
+  notes: {
+    1: {
+      id: 1,
+      content: ''
+    }
+  }
+}
+```
+
+请注意，在本例中，我们输入`undefined`作为状态。Redux总是将`undefined`作为初始状态传入，但通常你会使用一个默认参数`state = initialState`来获取初始状态对象。下一次，Redux将输入前一个状态。
+
+```js
+const state1  = reducer(state0, {
+  type: UPDATE_NOTE,
+  id: 1,
+  content: 'Hello, world!'
+});
+```
+
+现在的 `state1`：
+
+```js
+{
+  nextNoteId: 2,
+  notes: {
+    1: {
+      id: 1,
+      content: 'Hello, world!'
+    }
+  }
+}
+```
+
+[在JSFiddle上查看](https://jsfiddle.net/justindeal/kLkjt4y3/37/)
