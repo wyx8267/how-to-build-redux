@@ -358,3 +358,87 @@ const state = actions.reduce(reducer, undefined);
 [在JSFiddle上查看](https://jsfiddle.net/justindeal/edogdh33/13/)
 
 现在您可以理解为什么Redux将自己标榜为“ JavaScript应用的可预测状态容器”。因为输入相同的一组操作，最终都拥有相同的state。函数式编程万岁！如果您听说过Redux易重播的特性，大致就是这个意思。尽管开箱即用，但Redux不会保留actions。相反，只有一个变量指向state对象，并且我们不断更改该变量以指向下一个state。 这是您的应用中允许的一个重要突变，但是我们将在`store`内部控制该突变。
+
+## Store
+
+现在让我们建立一个store，该store将保留我们的单个state变量以及一些用于设置和获取state的有用方法。
+
+```js
+const validateAction = action => {
+  if (!action || typeof action !== 'object' || Array.isArray(action)) {
+    throw new Error('Action must be an object!');
+  }
+  if (typeof action.type === 'undefined') {
+    throw new Error('Action must have a type!');
+  }
+};
+
+const createStore = (reducer) => {
+  let state = undefined;
+  return {
+    dispatch: (action) => {
+      validateAction(action)
+      state = reducer(state, action);
+    },
+    getState: () => state
+  };
+};
+```
+
+现在你知道为什么我们用常量而不是字符串了吧。我们对action的验证比Redux的稍松一些，但它足够确保我们不会拼错action类型。如果我们传递字符串，那么我们的action可能会遵循reducer的默认情况，错误可能会被忽略。但是如果我们使用常量，那么输入错误将被视为未定义，然后将抛出错误。所以我们马上就会发现并解决它。
+
+现在让我们创建一个store并使用它。
+
+```js
+// 传入我们在前边创建的reducer
+const store = createStore(reducer);
+
+store.dispatch({
+  type: CREATE_NOTE
+});
+
+store.getState();
+// {
+//   nextNoteId: 2,
+//   notes: {
+//     1: {
+//       id: 1,
+//       content: ''
+//     }
+//   }
+// }
+```
+
+在这一点上，这是相当有用的。我们拥有了一个可以使用我们提供的任何reducer来管理状态的store。 但是它仍然缺少重要的一点：一种可以订阅更改的方法。没有这些，它将需要一些笨拙的命令性代码。当我们稍后引入异步操作时，它就会无法工作。 因此，让我们继续实现订阅：
+
+```js
+const createStore = reducer => {
+  let state;
+  const subscribers = [];
+  const store = {
+    dispatch: action => {
+      validateAction(action);
+      state = reducer(state, action);
+      subscribers.forEach(handler => handler());
+    },
+    getState: () => state,
+    subscribe: handler => {
+      subscribers.push(handler);
+      return () => {
+        const index = subscribers.indexOf(handler);
+        if (index > 0) {
+          subscribers.splice(index, 1);
+        }
+      };
+    }
+  };
+  store.dispatch({type: '@@redux/INIT'});
+  return store;
+};
+```
+
+createStore中添加了更多的代码，但不会很难以理解。`subscribe`函数接受一个处理函数，并将其添加到订阅列表中。然后返回一个取消订阅的函数。任何时候我们调用`dispatch`，我们都会通知所有的处理函数。现在，每次状态改变时都可以很容易地重新渲染了。
+
+[在JSFiddle上查看](https://jsfiddle.net/justindeal/8cpu4ydj/27/)
+
+试着编辑代码并派发更多action，HTML页面将始终展现最新的store状态。当然，对于真正的应用，我们希望将这些调度功能与用户操作联系起来。我们接下来就会解决这个问题！
