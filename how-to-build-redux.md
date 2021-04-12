@@ -442,3 +442,200 @@ createStore中添加了更多的代码，但不会很难以理解。`subscribe`�
 [在JSFiddle上查看](https://jsfiddle.net/justindeal/8cpu4ydj/27/)
 
 试着编辑代码并派发更多action，HTML页面将始终展现最新的store状态。当然，对于真正的应用，我们希望将这些调度功能与用户操作联系起来。我们接下来就会解决这个问题！
+
+### 添加你的组件
+
+如何让组件与Redux一起工作？只需要创建普通的React组件传递props即可。您带来了自己的state，那么就创建与该state(或部分state)一起工作的组件。有一些细微差别可能会影响后边的设计，尤其是性能方面，但在大多数情况下，死板的未优化的组件是一个很好的开始。
+
+```js
+const NoteEditor = ({note, onChangeNote, onCloseNote}) => (
+  <div>
+    <div>
+      <textarea
+        className="editor-content"
+        autoFocus
+        value={note.content}
+        onChange={event => onChangeNote(note.id, event.target.value)}
+        rows={10} cols={80}
+      />
+    </div>
+    <button className="editor-button" onClick={onCloseNote}>Close</button>
+  </div>
+);
+
+const NoteTitle = ({note}) => {
+  const title = note.content.split('\n')[0].replace(/^\s+|\s+$/g, '');
+  if (title === '') {
+    return <i>Untitled</i>;
+  }
+  return <span>{title}</span>;
+};
+
+const NoteLink = ({note, onOpenNote}) => (
+  <li className="note-list-item">
+    <a href="#" onClick={() => onOpenNote(note.id)}>
+      <NoteTitle note={note}/>
+    </a>
+  </li>
+);
+
+const NoteList = ({notes, onOpenNote}) => (
+  <ul className="note-list">
+    {
+      Object.keys(notes).map(id =>
+        <NoteLink
+          key={id}
+          note={notes[id]}
+          onOpenNote={onOpenNote}
+        />
+      )
+    }
+  </ul>
+);
+
+const NoteApp = ({
+  notes, openNoteId, onAddNote, onChangeNote,
+  onOpenNote, onCloseNote
+}) => (
+  <div>
+    {
+      openNoteId ?
+        <NoteEditor
+          note={notes[openNoteId]} onChangeNote={onChangeNote}
+          onCloseNote={onCloseNote}
+        /> :
+        <div>
+          <NoteList notes={notes} onOpenNote={onOpenNote}/>
+          <button className="editor-button" onClick={onAddNote}>New Note</button>
+        </div>
+    }
+  </div>
+);
+```
+
+Not much to see there. We could feed props into these components and render them right now. But let's look at the openNoteId prop and those onOpenNote and onCloseNote callbacks. We'll need to decide where that state and those callbacks live. We could just use component state for that. And there's nothing wrong with that. Once you start using Redux, there's no rule that says all your state needs to go into the Redux store. If you want to know when you have to use store state, just ask yourself:
+这部分没什么可看的。我们可以将props输入这些组件并立即进行渲染。但是，让我们看一下`openNoteId`属性以及那些`onOpenNote`和`onCloseNote`回调。需要确定该状态和这些回调的位置。我们可以只使用组件状态。没有规定说所有state都需要进入Redux存储。如果想知道何时必须存储state，只需问问自己：
+
+> Does this state need to exist after this component is unmounted?卸载此组件后是否需要存在该状态？
+
+If the answer is no, there's a good chance component state is appropriate. For state that has to be persisted to the server or shared across many components that may independently mount and unmount, Redux is probably a better choice.
+如果答案是否定的，那么很有可能组件状态是合适的。对于必须持久化到服务器或跨许多组件共享的状态(这些组件可能独立地挂载和卸载)，Redux可能是更好的选择。
+
+There are some times when Redux does work well for transient state though. In particular, when transient state needs to change as the result of changes to store state, it can be a little easier to just keep the transient state in the store. For our app, when we create a note, we want the openNoteId to be set to the new note id. This would be cumbersome to reflect inside component state, because we'd have to monitor for changes to the store state in componentWillReceiveProps. That's not to say it's wrong, just that it can be awkward. So for our app, we'll store openNoteId in our store state. (In a real app, we might want to involve a router for this. See the end of this post for a bit on that.)
+在某些情况下，尽管Redux在瞬态状态下表现良好。 特别是，当由于更改存储状态而需要更改瞬态时，仅将瞬态保留在存储中可能会容易一些。 对于我们的应用程序，当我们创建便笺时，我们希望将openNoteId设置为新的便笺ID。 反映组件内部状态将很麻烦，因为我们必须监视componentWillReceiveProps中存储状态的更改。 这并不是说它是错误的，只是它可能很尴尬。 因此，对于我们的应用程序，我们将以存储状态存储openNoteId。 （在真正的应用程序中，我们可能希望为此涉及路由器。有关此内容，请参阅本文的结尾。）
+
+The other reason you might want transient state in the store is simply to have access to it from Redux developer tools. It's really easy to peek into store state, and fancy things like replay will just work. It's pretty easy to start with local component state and switch to store state later, though. Just make sure to create container components for local state just like you would store state.
+您可能需要存储暂态的另一个原因只是为了能够从Redux developer tools访问它。查看存储状态真的很容易，像重放之类的东西就可以了。不过，从局部组件状态开始，然后切换到存储状态是非常容易的。只需确保为本地状态创建容器组件，就像存储状态一样。
+
+So, let's tweak our reducer to handle this transient state.
+那么，让我们调整reducer来处理这个暂态。
+
+```js
+const OPEN_NOTE = 'OPEN_NOTE';
+const CLOSE_NOTE = 'CLOSE_NOTE';
+
+const initialState = {
+  // ...
+  openNoteId: null
+};
+
+const reducer = (state = initialState, action) => {
+  switch (action.type) {
+    case CREATE_NOTE: {
+      const id = state.nextNoteId;
+      // ...
+      return {
+        ...state,
+        // ...
+        openNoteId: id,
+        // ...
+      };
+    }
+    // ...
+    case OPEN_NOTE: {
+      return {
+        ...state,
+        openNoteId: action.id
+      };
+    }
+    case CLOSE_NOTE: {
+      return {
+        ...state,
+        openNoteId: null
+      };
+    }
+    default:
+      return state;
+  }
+};
+```
+
+### 连接组件与Redux
+
+好的，现在我们可以将其连接起来了。为了不涉及现有的组件，我们将创建一个新的容器组件，该组件从store获取state并将其传递到我们的NoteApp。
+
+```js
+class NoteAppContainer extends React.Component {
+  constructor(props) {
+    super();
+    this.state = props.store.getState();
+    this.onAddNote = this.onAddNote.bind(this);
+    this.onChangeNote = this.onChangeNote.bind(this);
+    this.onOpenNote = this.onOpenNote.bind(this);
+    this.onCloseNote = this.onCloseNote.bind(this);
+  }
+  componentWillMount() {
+    this.unsubscribe = this.props.store.subscribe(() =>
+      this.setState(this.props.store.getState())
+    );
+  }
+  componentWillUnmount() {
+    this.unsubscribe();
+  }
+  onAddNote() {
+    this.props.store.dispatch({
+      type: CREATE_NOTE
+    });
+  }
+  onChangeNote(id, content) {
+    this.props.store.dispatch({
+      type: UPDATE_NOTE,
+      id,
+      content
+    });
+  }
+  onOpenNote(id) {
+    this.props.store.dispatch({
+      type: OPEN_NOTE,
+      id
+    });
+  }
+  onCloseNote() {
+    this.props.store.dispatch({
+      type: CLOSE_NOTE
+    });
+  }
+  render() {
+    return (
+      <NoteApp
+        {...this.state}
+        onAddNote={this.onAddNote}
+        onChangeNote={this.onChangeNote}
+        onOpenNote={this.onOpenNote}
+        onCloseNote={this.onCloseNote}
+      />
+    );
+  }
+}
+
+ReactDOM.render(
+  <NoteAppContainer store={store}/>,
+  document.getElementById('root')
+);
+```
+
+现在完整可用了，试试看！
+
+[在JSFiddle上查看](https://jsfiddle.net/justindeal/8bL9tL0z/23/)
+
+我们的应用程序将会派发action，这些action通过我们的reducer更新store，而我们的订阅则使视图保持同步。如果最终状态不符合预期，则不必查看所有组件，只需查看reducer和actions即可。
