@@ -906,3 +906,128 @@ const store = createStore(reducer, applyMiddleware(
 现在我们实现的Redux可以处理所有的事情！
 
 [在JSFiddle上查看](https://jsfiddle.net/justindeal/3ukd4mL7/52/)
+
+### Thunk middleware
+
+现在让我们来做一些真正的异步。为此，我们将引入一个“thunk”中间件
+
+```js
+const thunkMiddleware = ({dispatch, getState}) => next => action => {
+  if (typeof action === 'function') {
+    return action(dispatch, getState);
+  }
+  return next(action);
+};
+```
+
+“Thunk”实际上只是“function”的另一个名称，但它通常意味着“一个包装了一些待完成的工作的函数”。现在将`thunkMiddleware`加入：
+
+```js
+const store = createStore(reducer, applyMiddleware(
+  thunkMiddleware,
+  loggingMiddleware
+));
+```
+
+然后做一些这样的操作：
+
+```js
+store.dispatch(({getState, dispatch}) => {
+  // 从state获取一些东西
+  const someId = getState().someId;
+  // 获取一些依赖于现有数据的东西
+  fetchSomething(someId)
+    .then((something) => {
+      dispatch({
+        type: 'someAction',
+        something
+      });
+    });
+});
+```
+
+thunk中间件十分有用。我们可以从state内取出任何我们想要的东西，然后在任何时间dispatch任何我们想要的操作。这确实很灵活，但随着应用程序规模的增长，它可能会变得有点危险。目前是一个很好的开始。让我们用它来做一些异步工作。
+
+首先，我们模拟一个api：
+
+```js
+const createFakeApi = () => {
+  let _id = 0;
+  const createNote = () => new Promise(resolve => setTimeout(() => {
+    _id++
+    resolve({
+      id: `${_id}`
+    })
+  }, 1000));
+  return {
+    createNote
+  };
+};
+
+const api = createFakeApi()
+```
+
+这个API只支持一个创建笔记并返回新id的方法。由于我们现在从服务器获取id，我们需要再次调整reducer。
+
+```js
+const initialState = {
+  notes: {},
+  openNoteId: null,
+  isLoading: false
+};
+
+const reducer = (state = initialState, action) => {
+  switch (action.type) {
+    case CREATE_NOTE: {
+      if (!action.id) {
+        return {
+          ...state,
+          isLoading: true
+        };
+      }
+      const newNote = {
+        id: action.id,
+        content: ''
+      };
+      return {
+        ...state,
+        isLoading: false,
+        openNoteId: action.id,
+        notes: {
+          ...state.notes,
+          [action.id]: newNote
+        }
+      };
+    }
+    // ...
+  }
+};
+```
+
+这里，我们使用`CREATE NOTE`操作来设置加载状态并在store中实际创建新的笔记。我们只使用id属性的存在与否来表示区别。你可能想要为你的应用程序使用不同的操作，但再次强调，Redux并不真正关心你使用的是什么。如果你想要一些规范性的东西，你可以看看[Flux Standard Actions](https://github.com/redux-utilities/flux-standard-action?utm_source=zapier.com&utm_medium=referral&utm_campaign=zapier&utm_source=zapier.com&utm_medium=referral&utm_campaign=zapier)。
+
+现在让我们调整`mapDispatchToProps`来派发一个thunk。
+
+```js
+const mapDispatchToProps = dispatch => ({
+  onAddNote: () => dispatch(
+    (dispatch) => {
+      dispatch({
+        type: CREATE_NOTE
+      });
+      api.createNote()
+        .then(({id}) => {
+          dispatch({
+            type: CREATE_NOTE,
+            id
+          });
+        });
+    }
+  ),
+  // ...
+});
+```
+
+[在JSFiddle上查看](https://jsfiddle.net/justindeal/o27j5zs1/8/)
+
+但是等等，除了我们在组件中丢弃的一些丑陋的代码外，我们还发明了中间件来去除这些代码。但现在我们把它又放回去了。如果我们使用一些自定义api中间件而不是使用thunk，我们就可以摆脱它。但即使使用了thunk中间件，我们仍然可以让各部分代码更有条理。
