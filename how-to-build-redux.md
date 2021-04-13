@@ -10,7 +10,7 @@ Redux是一个简单的库，可帮助您管理JavaScript应用的状态。尽�
 
 ## 创建一个状态对象
 
-大多数应用会从服务器获取状态，但是让我们从本地创建状态开始。即使我们正在从服务器检索，我们也必须在应用程序中添加一些初始化内容。我们将做一个简单的笔记应用。这主要是为了避免制作又一个todo应用，but it will also force us to make an interesting state decision later.
+大多数应用会从服务器获取状态，但是让我们从本地创建状态开始。即使我们正在从服务器检索，我们也必须在应用程序中添加一些初始化内容。我们将做一个简单的笔记应用。这主要是为了避免制作又一个todo应用，但也会促使我们之后对state做一些有趣的东西。
 
 ```js
 const initialState = {
@@ -27,7 +27,7 @@ const initialState = {
 
 `window.state = initialState;`
 
-Boom——我们的store来了!我们不需要什么恶心的redux。让我们创建一个用来添加笔记的组件。
+我们的store来了！好像我们不需要什么恶心的redux。让我们创建一个用来添加笔记的组件。
 
 ```js
 const onAddNote = () => {
@@ -94,15 +94,14 @@ const ARCHIVE_TAG_ID = 0;
 
 const onAddTag = (noteId, tagId) => {
   window.state.onLoading = true;
-  // 糟糕，忘记在这里进行渲染
-  // 在高速的本地服务器中可能不会注意到
+  // 糟糕，忘记在这里进行渲染loading
+  // 在高速的本地开发中可能不会注意到
   api.addTag(noteId, tagId)
     .then(() => {
       window.state.onLoading = false;
       window.state.tagMapping[tagId] = noteId;
       if (ARCHIVE_TAG_ID) {
-        // 糟糕，这里出现了命名错误。可能是非法搜查和替换的结果。直到我们测试没人真正使用的档案页面时才会注意到。
-        // 【archived】 ======> 【archive】
+        // 出现错误，if内永远不会执行
         window.state.archived = window.state.archive || {};
         window.state.archived[noteId] = window.state.notes[noteId];
         delete window.state.notes[noteId];
@@ -276,7 +275,7 @@ const reducer = (state = initialState, action) => {
 
 这将返回简洁的处理state变化的代码，如果您这样做，在技术上是可行的，但您将忽略所有潜在的性能问题。每个对象和数组在每次状态变化时都将是全新的，所以任何依赖于这些对象和数组的组件都必须重新渲染，即使你实际上没有做任何变化。
 
-我们的不可变reducer绝对需要更多的思想和代码来完善。但是随着时间的推移，您会逐渐意识到状态更改功能是被隔离的并且易于测试。对于真正的应用，您可能需要使用`lodash-fp`或`Ramda`或`Immutable.js`之类的东西。在Zapier（原作者所属机构），我们使用了`immutability-helper`的变体，它非常简单。然而我仍要提醒你，这是一个很大的无底洞，我甚至开始以不同的方式来编写库。原生JS也很好，在强大的输入解决方案（例如`Flow`和`TypeScript`）中可能会更好地发挥作用。只要确保坚持使用较小的功能即可。这很像使用React做出的权衡：您可能会得到比同等jQuery解决方案更多的代码，但是每个组件的可预测性要高得多。
+我们的不可变reducer绝对需要更多的思想和代码来完善。但是随着时间的推移，您会逐渐意识到状态更改功能是被隔离的并且易于测试。对于真正的应用，您可能需要使用`lodash-fp`或`Ramda`或`Immutable.js`之类的东西。在Zapier（原作者所属机构），我们使用了`immutability-helper`的变体，它非常简单。然而我仍要提醒你，这是一个很大的无底洞，我甚至开始以不同的方式来编写库。原生JS也很好，在强大的类型解决方案（例如`Flow`和`TypeScript`）中可能会更好地发挥作用。只要确保坚持使用简单的函数即可。这很像使用React做出的权衡：您可能会得到比同等jQuery解决方案更多的代码，但是每个组件的可预测性要高得多。
 
 ### Using our Reducer
 
@@ -513,13 +512,21 @@ const NoteApp = ({
 );
 ```
 
+```
+NoteApp
+  |--NoteEditor
+  |--NoteList
+      |--NoteLink
+          |--NoteTitle
+```
+
 这部分没什么可看的。我们可以将props输入这些组件并立即进行渲染。但是，让我们看一下`openNoteId`属性以及那些`onOpenNote`和`onCloseNote`回调。我们可以只使用组件state去确定该状态和这些回调的位置。没有规定说所有state都需要进入Redux存储。如果想知道何时必须存储state，只需问问自己：
 
 > 卸载此组件后该状态是否需要存在？
 
 如果答案是否定的，那么使用组件state就足够了。对于必须持久化保存到服务器或跨许多组件共享的状态(这些组件可能需要独立地挂载和卸载)，Redux可能是更好的选择。
 
-在某些情况下，尽管Redux处理暂态时表现良好。（暂态：例如带网络请求的action的loading和error状态）特别是，当更改store而需要更改暂态时，仅将暂态保留在store中可能会容易一些。对于我们的应用，当我们创建笔记时，我们希望将`openNoteId`设置为新的笔记ID。反映组件内部状态很麻烦，因为我们必须监视`componentWillReceiveProps`中store的更改。 这并不是说它是错误的，只是它可能很尴尬。因此，对于我们的应用，我们将用store存储`openNoteId`。（在真正的应用程序中，我们可能希望为此使用路由。有关此内容，请参阅本文的结尾。）
+在某些情况下，尽管Redux处理暂态时表现良好。（暂态：例如带网络请求的action的loading和error状态）特别是，当更改store而需要更改暂态时，仅将暂态保留在store中可能会容易一些。对于我们的应用，当我们创建笔记时，我们希望将`openNoteId`设置为新的笔记ID。反映组件内部状态很麻烦，因为我们必须监视`componentWillReceiveProps`中store的更改。 这并不是说它是错误的，只是它可能很尴尬。因此，对于我们的应用，我们将用store存储`openNoteId`。
 
 您需要存储暂态的另一个原因可能只是为了能够从Redux developer tools访问它。使用重放之类的东西就能轻松的查看store。而且，从局部组件state开始，然后切换到store也是非常容易的。只需确保像存储状态一样为本地状态创建容器组件就行。
 
@@ -639,11 +646,11 @@ ReactDOM.render(
 
 好的，一切正常。 但是……还有一些问题。
 
-  1. 有必要接线 (Wiring feels imperative.)
+  1. Wiring feels imperative.（需要接线？
   2. 容器组件中有很多重复项。
   3. 每次我们要将store连接到组件时，我们都必须使用全局store对象。否则，我们将不得不在整个树中以props传递store。或者，我们将不得不在顶层将其连接一次，然后将所有内容向下传递到树上，这在大型应用程序中可能并不好。
 
-这就是为什么我们需要React Redux的`Provider`以及`connect`的原因。首先，让我们制作一个`Provider`组件。
+这就是为什么我们需要React Redux的`Provider`以及`connect`的原因。首先，让我们创建一个`Provider`组件。
 
 ```js
 class Provider extends React.Component {
@@ -662,7 +669,6 @@ Provider.childContextTypes = {
 };
 ```
 
-Pretty simple. The Provider component uses React's context feature to convert a store prop into a context property. Context is a way to pass information from a top-level component down to descendant components without components in the middle having to explicitly pass props. In general, you should avoid context, because the React documentation says so:
 很简单，`Provider`组件使用React的上下文功能将store props转换为上下文属性。Context是一种将信息从顶级组件向下传递到子代组件的方法，而中间的组件则不必显式传递props。通常，您应该避免使用上下文，因为React文档中是这样说的：
 
 > 如果你想让你的应用程序稳定，不要使用context。这是一个实验性的API，很可能会在React的未来版本中被打破。

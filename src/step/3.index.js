@@ -1,6 +1,40 @@
 import React from 'react'
 import ReactDOM from 'react-dom'
 
+
+const validateAction = action => {
+  if (!action || typeof action !== 'object' || Array.isArray(action)) {
+    throw new Error('Action must be an object!');
+  }
+  if (typeof action.type === 'undefined') {
+    throw new Error('Action must have a type!');
+  }
+};
+
+const createStore = reducer => {
+  let state;
+  const subscribers = [];
+  const store = {
+    dispatch: action => {
+      validateAction(action);
+      state = reducer(state, action);
+      subscribers.forEach(handler => handler());
+    },
+    getState: () => state,
+    subscribe: handler => {
+      subscribers.push(handler);
+      return () => {
+        const index = subscribers.indexOf(handler);
+        if (index > 0) {
+          subscribers.splice(index, 1);
+        }
+      };
+    }
+  };
+  store.dispatch({type: '@@redux/INIT'});
+  return store;
+};
+
 const CREATE_NOTE = 'CREATE_NOTE'
 const UPDATE_NOTE = 'UPDATE_NOTE'
 
@@ -45,40 +79,14 @@ const reducer = (state = initialState, action) => {
   }
 };
 
-const validateAction = action => {
-  if (!action || typeof action !== 'object' || Array.isArray(action)) {
-    throw new Error('Action must be an object!');
-  }
-  if (typeof action.type === 'undefined') {
-    throw new Error('Action must have a type!');
-  }
-};
-
-const createStore = reducer => {
-  let state;
-  const subscribers = [];
-  const store = {
-    dispatch: action => {
-      validateAction(action);
-      state = reducer(state, action);
-      subscribers.forEach(handler => handler());
-    },
-    getState: () => state,
-    subscribe: handler => {
-      subscribers.push(handler);
-      return () => {
-        const index = subscribers.indexOf(handler);
-        if (index > 0) {
-          subscribers.splice(index, 1);
-        }
-      };
-    }
-  };
-  store.dispatch({type: '@@redux/INIT'});
-  return store;
-};
-
 const store = createStore(reducer);
+
+store.subscribe(() => {
+  ReactDOM.render(
+    <pre>{JSON.stringify(store.getState(), null, 2)}</pre>,
+    document.getElementById('root')
+  );
+});
 
 store.dispatch({
   type: CREATE_NOTE
@@ -89,12 +97,3 @@ store.dispatch({
   id: 1,
   content: 'Hello, world!'
 });
-
-const renderApp = () => {
-  ReactDOM.render(
-    <pre>{JSON.stringify(store.getState(), null, 2)}</pre>,
-    document.getElementById('root')
-  );
-};
-
-renderApp();
