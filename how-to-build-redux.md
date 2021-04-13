@@ -761,3 +761,95 @@ ReactDOM.render(
 好了，我们的store只在顶层传入一次，然后`connect`将其收集起来并完成所有工作。
 
 [在JSFiddle上查看](https://jsfiddle.net/justindeal/srnf5n20/10/)
+
+## Middleware 中间件
+
+现在我们已经建立了一些非常有用的东西，但还有一处很大的缺陷。某些情况下，我们希望与服务器进行对话。但现在我们的操作都是同步的，如何进行异步操作呢？我们可以从组件中获取远程数据，但仍有一些问题：
+  1. Redux（除了`Provicer`和`connect`）并不是特定于React的。如果能有一个Redux自己的解决方案就好了。
+  2. 有时在获取数据时需要访问state。 我们不想在任何地方都绕过state。因此，我们最终不得不构建诸如`connect`之类的东西来进行数据提取。
+  3. 目前情况下，如果不使用组件，就无法测试涉及数据获取的state更改。如果我们可以独立的获取数据，这会更有利于测试。
+  4. 最后，我们将失去一些工具化的好处。
+
+既然Redux是同步的，这该如何实现呢？我们通过在dispatch的中途放置一些东西并更改store state。这个东西就是中间件。
+
+我们需要一种将中间件传递到store的方法，让我们开始吧。
+
+```js
+const createStore = (reducer, middleware) => {
+  let state;
+  const subscribers = [];
+  const coreDispatch = action => {
+    validateAction(action);
+    state = reducer(state, action);
+    subscribers.forEach(handler => handler());
+  };
+  const getState = () => state;
+  const store = {
+    dispatch: coreDispatch,
+    getState,
+    subscribe: handler => {
+      subscribers.push(handler);
+      return () => {
+        const index = subscribers.indexOf(handler)
+        if (index > 0) {
+          subscribers.splice(index, 1);
+        }
+      };
+    }
+  };
+  if (middleware) {
+    const dispatch = action => store.dispatch(action);
+    store.dispatch = middleware({
+      dispatch,
+      getState
+    })(coreDispatch);
+  }
+  coreDispatch({type: '@@redux/INIT'});
+  return store;
+}
+```
+
+现在函数有点复杂了，但重要的部分是最后一个if语句。
+
+```js
+if (middleware) {
+  const dispatch = action => store.dispatch(action);
+  store.dispatch = middleware({
+    dispatch,
+    getState
+  })(coreDispatch);
+}
+```
+
+我们创建了一个将“重新派发”的函数。
+
+`const dispatch = action => store.dispatch(action);`
+
+如果一个中间件决定dispatch一个新的action，这个新的action会通过中间件返回。我们必须创建这个函数以更改store的dispatch函数。这是另一个突变让事情变得更容易的地方。只要Redux有助于执行规则，它就可以打破规则。: -)
+
+```js
+store.dispatch = middleware({
+  dispatch,
+  getState
+})(coreDispatch);
+```
+
+这里调用了中间件，并向其传递一个对象，该对象可以访问我们的“重新派发”功能以及我们的`getState`函数。中间件将返回一个新功能，该功能可以调用下一个dispatch，在当前情况下，该功能只是原始的dispatch。 如果您感觉有些混乱，请不要担心，创建和使用中间件实际上很容易。
+
+好的，让我们创建一个中间件来延迟dispatch一秒钟。没什么用，但它能展示异步操作。
+
+```js
+const delayMiddleware = () => next => action => {
+  setTimeout(() => {
+    next(action);
+  }, 1000);
+};
+```
+
+这个例子看起来超级傻，但它符合我们之前创造的谜题。它是一个函数，返回一个函数，该函数接受下一个dispatch函数。“下一个”函数执行操作。好吧，看起来Redux的箭头函数有点疯狂，但是有一个原因，我们很快就会指出来。现在，让我们在store中引入中间件。
+
+`const store = createStore(reducer, delayMiddleware);`
+
+是的，它成功使我们的应用程序变慢了！亲自体验一下这个可怕的应用程序。
+
+[在JSFiddle上查看](https://jsfiddle.net/justindeal/56uf0uy7/7/)
