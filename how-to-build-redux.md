@@ -1031,3 +1031,49 @@ const mapDispatchToProps = dispatch => ({
 [在JSFiddle上查看](https://jsfiddle.net/justindeal/o27j5zs1/8/)
 
 但是等等，除了我们在组件中丢弃的一些丑陋的代码外，我们还发明了中间件来去除这些代码。但现在我们把它又放回去了。如果我们使用一些自定义api中间件而不是使用thunk，我们就可以摆脱它。但即使使用了thunk中间件，我们仍然可以让各部分代码更有条理。
+
+## Action Creators
+
+与其从组件中派发thunk，不如将其抽象化放入函数中。
+
+```js
+const createNote = () => {
+  return (dispatch) => {
+    dispatch({
+      type: CREATE_NOTE
+    });
+    api.createNote()
+      .then(({id}) => {
+        dispatch({
+          type: CREATE_NOTE,
+          id
+        })
+      });
+  }
+};
+```
+
+我们刚刚发明了一个action创建函数，没有花哨的东西，它们只是返回需要派发的action。有助于：
+
+  1. 抽象出一个thunk action
+  2. 简化代码，特别是多个组件有相同的操作时。Keep your code DRY! [DRY-Don't repeat yourself](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself)
+  3. 分离开组件与action，使组件含义简单明确。
+
+我们本可以更早地引入action creator，但没有理由。我们的应用程序很简单，所以没有重复任何操作。
+
+让我们再次调整`mapDispatchToProps`以使用action creator。
+
+```js
+const mapDispatchToProps = dispatch => ({
+  onAddNote: () => dispatch(createNote()),
+  // ...
+});
+```
+
+[在JSFiddle上查看-最终结果](https://jsfiddle.net/justindeal/5j3can1z/171/)
+
+## 最后
+
+您建立了自己的Redux！似乎我们写了很多代码，但是其中大多数是我们的reducer和组件。我们实际的Redux实现代码非常少，不到140行。其中包括我们的thunk和日志中间件，空行以及一些注释！
+
+虽然距离真正的Redux和制作一个真正的应用程序还差得有些远。继续阅读，我们将讨论其中的一些内容。但是，希望本指南对你理解Redux有所启发！
