@@ -565,7 +565,7 @@ const reducer = (state = initialState, action) => {
 };
 ```
 
-### 连接组件与Redux
+### 手动连接组件与Redux
 
 好的，现在我们可以将其连接起来了。为了不涉及现有的组件，我们将创建一个新的容器组件，该组件从store获取state并将其传递到我们的NoteApp。
 
@@ -634,3 +634,130 @@ ReactDOM.render(
 [在JSFiddle上查看](https://jsfiddle.net/justindeal/8bL9tL0z/23/)
 
 我们的应用程序将会派发action，这些action通过我们的reducer更新store，而我们的订阅则使视图保持同步。如果最终状态不符合预期，则不必查看所有组件，只需查看reducer和actions即可。
+
+## Provider以及Connect
+
+好的，一切正常。 但是……还有一些问题。
+
+  1. 有必要接线 (Wiring feels imperative.)
+  2. 容器组件中有很多重复项。
+  3. 每次我们要将store连接到组件时，我们都必须使用全局store对象。否则，我们将不得不在整个树中以props传递store。或者，我们将不得不在顶层将其连接一次，然后将所有内容向下传递到树上，这在大型应用程序中可能并不好。
+
+这就是为什么我们需要React Redux的`Provider`以及`connect`的原因。首先，让我们制作一个`Provider`组件。
+
+```js
+class Provider extends React.Component {
+  getChildContext() {
+    return {
+      store: this.props.store
+    };
+  }
+  render() {
+    return this.props.children;
+  }
+}
+
+Provider.childContextTypes = {
+  store: PropTypes.object
+};
+```
+
+Pretty simple. The Provider component uses React's context feature to convert a store prop into a context property. Context is a way to pass information from a top-level component down to descendant components without components in the middle having to explicitly pass props. In general, you should avoid context, because the React documentation says so:
+很简单，`Provider`组件使用React的上下文功能将store props转换为上下文属性。Context是一种将信息从顶级组件向下传递到子代组件的方法，而中间的组件则不必显式传递props。通常，您应该避免使用上下文，因为React文档中是这样说的：
+
+> 如果你想让你的应用程序稳定，不要使用context。这是一个实验性的API，很可能会在React的未来版本中被打破。
+
+这就是为什么我们的实现不要求任何人直接使用context。相反，我们将这个实验性API封装在组件中，因此如果它发生了变化，我们可以改变我们的实现，而不需要开发人员改变他们的代码。
+
+所以现在我们需要一种将context转换回props的方法。这就是`connect`的作用所在。
+
+```js
+const connect = (
+  mapStateToProps = () => ({}),
+  mapDispatchToProps = () => ({})
+) => Component => {
+  class Connected extends React.Component {
+    onStoreOrPropsChange(props) {
+      const {store} = this.context;
+      const state = store.getState();
+      const stateProps = mapStateToProps(state, props);
+      const dispatchProps = mapDispatchToProps(store.dispatch, props);
+      this.setState({
+        ...stateProps,
+        ...dispatchProps
+      });
+    }
+    componentWillMount() {
+      const {store} = this.context;
+      this.onStoreOrPropsChange(this.props);
+      this.unsubscribe = store.subscribe(() => this.onStoreOrPropsChange(this.props));
+    }
+    componentWillReceiveProps(nextProps) {
+      this.onStoreOrPropsChange(nextProps);
+    }
+    componentWillUnmount() {
+      this.unsubscribe();
+    }
+    render() {
+      return <Component {...this.props} {...this.state}/>;
+    }
+  }
+
+  Connected.contextTypes = {
+    store: PropTypes.object
+  };
+
+  return Connected;
+}
+```
+
+有点复杂，说实话，与实际相比已经简化了很多。(我们在最后会稍微讨论一下。)但这已经很接近了。`connect`是一个高阶组件。事实上，它是一个更高层次的部件工厂。它接受两个函数，并返回一个函数，该函数接受一个组件，并返回一个新组件。该组件订阅store，并在组件发生更改时更新组件的props。
+
+### 自动连接组件与Redux
+
+```js
+const mapStateToProps = state => ({
+  notes: state.notes,
+  openNoteId: state.openNoteId
+});
+
+const mapDispatchToProps = dispatch => ({
+  onAddNote: () => dispatch({
+    type: CREATE_NOTE
+  }),
+  onChangeNote: (id, content) => dispatch({
+    type: UPDATE_NOTE,
+    id,
+    content
+  }),
+  onOpenNote: id => dispatch({
+    type: OPEN_NOTE,
+    id
+  }),
+  onCloseNote: () => dispatch({
+    type: CLOSE_NOTE
+  })
+});
+
+const NoteAppContainer = connect(
+  mapStateToProps,
+  mapDispatchToProps
+)(NoteApp);
+```
+
+嘿，看起来好多了！
+
+传递给`connect` (`mapStateToProps`)的第一个函数从`store`中获取当前状态并返回一些props。传递给`connect` (`mapDispatchToProps`)的第二个函数接受`store`的`dispatch`方法，并返回更多的props。这会返回一个新函数，我们把组件传递给这个函数，就会返回一个新组件，它将自动获得所有映射好的props(加上我们传入的任何额外props)。现在我们只需要使用我们的`Provider`组件，以便`connect`可以从上下文中获取存储。
+
+```js
+ReactDOM.render(
+  <Provider store={store}>
+    <NoteAppContainer/>
+  </Provider>,
+  document.getElementById('root')
+);
+```
+
+好了，我们的store只在顶层传入一次，然后`connect`将其收集起来并完成所有工作。
+
+[在JSFiddle上查看](https://jsfiddle.net/justindeal/srnf5n20/10/)
