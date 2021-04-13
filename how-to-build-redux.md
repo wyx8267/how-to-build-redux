@@ -513,21 +513,16 @@ const NoteApp = ({
 );
 ```
 
-Not much to see there. We could feed props into these components and render them right now. But let's look at the openNoteId prop and those onOpenNote and onCloseNote callbacks. We'll need to decide where that state and those callbacks live. We could just use component state for that. And there's nothing wrong with that. Once you start using Redux, there's no rule that says all your state needs to go into the Redux store. If you want to know when you have to use store state, just ask yourself:
-这部分没什么可看的。我们可以将props输入这些组件并立即进行渲染。但是，让我们看一下`openNoteId`属性以及那些`onOpenNote`和`onCloseNote`回调。需要确定该状态和这些回调的位置。我们可以只使用组件状态。没有规定说所有state都需要进入Redux存储。如果想知道何时必须存储state，只需问问自己：
+这部分没什么可看的。我们可以将props输入这些组件并立即进行渲染。但是，让我们看一下`openNoteId`属性以及那些`onOpenNote`和`onCloseNote`回调。我们可以只使用组件state去确定该状态和这些回调的位置。没有规定说所有state都需要进入Redux存储。如果想知道何时必须存储state，只需问问自己：
 
-> Does this state need to exist after this component is unmounted?卸载此组件后是否需要存在该状态？
+> 卸载此组件后该状态是否需要存在？
 
-If the answer is no, there's a good chance component state is appropriate. For state that has to be persisted to the server or shared across many components that may independently mount and unmount, Redux is probably a better choice.
-如果答案是否定的，那么很有可能组件状态是合适的。对于必须持久化到服务器或跨许多组件共享的状态(这些组件可能独立地挂载和卸载)，Redux可能是更好的选择。
+如果答案是否定的，那么使用组件state就足够了。对于必须持久化保存到服务器或跨许多组件共享的状态(这些组件可能需要独立地挂载和卸载)，Redux可能是更好的选择。
 
-There are some times when Redux does work well for transient state though. In particular, when transient state needs to change as the result of changes to store state, it can be a little easier to just keep the transient state in the store. For our app, when we create a note, we want the openNoteId to be set to the new note id. This would be cumbersome to reflect inside component state, because we'd have to monitor for changes to the store state in componentWillReceiveProps. That's not to say it's wrong, just that it can be awkward. So for our app, we'll store openNoteId in our store state. (In a real app, we might want to involve a router for this. See the end of this post for a bit on that.)
-在某些情况下，尽管Redux在瞬态状态下表现良好。 特别是，当由于更改存储状态而需要更改瞬态时，仅将瞬态保留在存储中可能会容易一些。 对于我们的应用程序，当我们创建便笺时，我们希望将openNoteId设置为新的便笺ID。 反映组件内部状态将很麻烦，因为我们必须监视componentWillReceiveProps中存储状态的更改。 这并不是说它是错误的，只是它可能很尴尬。 因此，对于我们的应用程序，我们将以存储状态存储openNoteId。 （在真正的应用程序中，我们可能希望为此涉及路由器。有关此内容，请参阅本文的结尾。）
+在某些情况下，尽管Redux处理暂态时表现良好。（暂态：例如带网络请求的action的loading和error状态）特别是，当更改store而需要更改暂态时，仅将暂态保留在store中可能会容易一些。对于我们的应用，当我们创建笔记时，我们希望将`openNoteId`设置为新的笔记ID。反映组件内部状态很麻烦，因为我们必须监视`componentWillReceiveProps`中store的更改。 这并不是说它是错误的，只是它可能很尴尬。因此，对于我们的应用，我们将用store存储`openNoteId`。（在真正的应用程序中，我们可能希望为此使用路由。有关此内容，请参阅本文的结尾。）
 
-The other reason you might want transient state in the store is simply to have access to it from Redux developer tools. It's really easy to peek into store state, and fancy things like replay will just work. It's pretty easy to start with local component state and switch to store state later, though. Just make sure to create container components for local state just like you would store state.
-您可能需要存储暂态的另一个原因只是为了能够从Redux developer tools访问它。查看存储状态真的很容易，像重放之类的东西就可以了。不过，从局部组件状态开始，然后切换到存储状态是非常容易的。只需确保为本地状态创建容器组件，就像存储状态一样。
+您需要存储暂态的另一个原因可能只是为了能够从Redux developer tools访问它。使用重放之类的东西就能轻松的查看store。而且，从局部组件state开始，然后切换到store也是非常容易的。只需确保像存储状态一样为本地状态创建容器组件就行。
 
-So, let's tweak our reducer to handle this transient state.
 那么，让我们调整reducer来处理这个暂态。
 
 ```js
