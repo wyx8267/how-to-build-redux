@@ -853,3 +853,56 @@ const delayMiddleware = () => next => action => {
 是的，它成功使我们的应用程序变慢了！亲自体验一下这个可怕的应用程序。
 
 [在JSFiddle上查看](https://jsfiddle.net/justindeal/56uf0uy7/7/)
+
+### 连接多个中间件
+
+现在让我们创建另一个(更有用的)日志中间件。
+
+```js
+const loggingMiddleware = ({getState}) => next => action => {
+  console.info('before', getState());
+  console.info('action', action);
+  const result = next(action);
+  console.info('after', getState());
+  return result;
+};
+```
+
+这很有用，让我们将其添加到我们的store中。但现在我们的store只接受一种中间件。那么我们需要一种将中间件组合在一起的方法。因此，我们要找到一种将许多中间件转变为一个中间件的方法。开始构建`applyMiddleware`！
+
+```js
+const applyMiddleware = (...middlewares) => store => {
+  if (middlewares.length === 0) {
+    return dispatch => dispatch;
+  }
+  if (middlewares.length === 1) {
+    return middlewares[0](store);
+  }
+  const boundMiddlewares = middlewares.map(middleware =>
+    middleware(store)
+  );
+  return boundMiddlewares.reduce((a, b) =>
+    next => a(b(next))
+  );
+};
+```
+
+首先要注意的是，它接受一组中间件并返回一个中间件函数。这个新的中间件函数与之前的中间件具有相同的结构。它接受一个store(实际上只是我们的re-`dispatch`和`getState`方法，而不是整个store)并返回另一个函数。对于这个函数：
+
+  1. 如果没有传入中间件，则返回原本的dispatch函数。 基本上，只是一个无操作中间件。这很愚蠢，但只是在阻止特殊情况。
+  2. 如果我们有一个中间件函数，我们返回那个中间件函数。同样，只是在阻止特殊情况。
+  3. 将一组中间件绑定到我们的伪store中。终于做正事了。
+  4. 将所有这些功能绑定到next dispatch。 这就是为什么我们的中间件必须一直使用箭头函数。我们剩下的一个函数将采取行动，并能够继续调用next dispatch函数，直到最终到达原始的dispatch函数。
+
+现在我们可以使用所有我们想要的中间件了。
+
+```js
+const store = createStore(reducer, applyMiddleware(
+  delayMiddleware,
+  loggingMiddleware
+));
+```
+
+现在我们实现的Redux可以处理所有的事情！
+
+[在JSFiddle上查看](https://jsfiddle.net/justindeal/3ukd4mL7/52/)
