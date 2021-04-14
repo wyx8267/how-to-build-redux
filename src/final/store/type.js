@@ -1,0 +1,8 @@
+const TYPES = {
+  CREATE_NOTE: 'CREATE_NOTE',
+  UPDATE_NOTE: 'UPDATE_NOTE',
+  OPEN_NOTE: 'OPEN_NOTE',
+  CLOSE_NOTE: 'CLOSE_NOTE'
+}
+
+export default TYPES
