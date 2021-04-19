@@ -2,15 +2,15 @@
 
 > p.s. 翻译粗糙，详见[原文](https://zapier.com/engineering/how-to-build-redux/)
 
-Redux是一个简单的库，可帮助您管理JavaScript应用的状态。尽管它有这种简单性，但在学习时还是很容易掉进无底洞。我发现自己在解释Redux时，几乎总是从展示如何实现它开始。所以这就是我们要做的：从头开始构建实现有效的Redux。我们的实现不会涵盖所有细微差别，但我们将展示大部分的奥秘。
+Redux是一个简单的库，可帮助您管理JavaScript应用的状态。尽管它很简单，但在学习时还是很容易掉进无底洞。我发现自己在解释Redux时，几乎总是从展示如何实现它开始。所以这就是我们要做的：从头开始构建实现有效的Redux。我们的实现不会涵盖所有细微差别，但我们将展示大部分的原理。
 
-请注意，从技术上讲，我们将构建Redux和React Redux。 多数情况下我们将Redux与React配合使用。但是，即使您将Redux与其他东西结合使用，此处的大多数内容仍然适用。
+请注意，从技术上讲，我们将构建Redux和React Redux。多数情况下我们将Redux与React配合使用。但是，即使您将Redux与其他东西结合使用，此处的大多数内容仍然适用。
 
 让我们开始吧。
 
 ## 创建一个状态对象
 
-大多数应用会从服务器获取状态，但是让我们从本地创建状态开始。即使我们正在从服务器检索，我们也必须在应用程序中添加一些初始化内容。我们将做一个简单的笔记应用。这主要是为了避免制作又一个todo应用，但也会促使我们之后对state做一些有趣的东西。
+大多数应用会从服务器获取状态，但是让我们从本地创建状态开始。即使我们要从服务器获取，我们也必须在应用程序中添加一些初始化状态。我们将做一个简单的笔记应用。这主要是为了避免制作千篇一律的todo应用，但也会促使我们之后对state做一些有趣的东西。
 
 ```js
 const initialState = {
@@ -21,7 +21,7 @@ const initialState = {
 
 首先，注意到我们的数据只是一个普通的JS对象。Redux管理状态的更改，但并不关心状态本身。
 
-### 为什么要使用Redux?
+### 为什么使用Redux?
 
 在深入之前，让我们看看在没有Redux的情况下构建应用是什么感觉。像这样把`initialState`添加到`window`。
 
@@ -94,14 +94,14 @@ const ARCHIVE_TAG_ID = 0;
 
 const onAddTag = (noteId, tagId) => {
   window.state.onLoading = true;
-  // 糟糕，忘记在这里进行渲染loading
+  // 糟糕，忘记在这里渲染loading
   // 在高速的本地开发中可能不会注意到
   api.addTag(noteId, tagId)
     .then(() => {
       window.state.onLoading = false;
       window.state.tagMapping[tagId] = noteId;
       if (ARCHIVE_TAG_ID) {
-        // 出现错误，if内永远不会执行
+        // 出现一些命名 bug，可能是由于粗暴的搜索/替换产生的
         window.state.archived = window.state.archive || {};
         window.state.archived[noteId] = window.state.notes[noteId];
         delete window.state.notes[noteId];
@@ -124,9 +124,9 @@ const SomeEvilComponent = () => {
   1. 任何地方都可能引起渲染，可能会有怪异的UI故障或无响应故障在看似随机的时间点出现。
   2. 即使在我们在此处看到的少量代码中，也潜伏着冲突。
   3. 这种混乱几乎是不可能测试的。必须使整个应用程序处于特定状态，然后用棍子戳它（人为干预），然后查看整个应用的状态以确认是否符合期望。
-  4. 如果出现bug，你本可以做一些有根据的猜测，但从根本上说，代码的每一行都是一个嫌疑对象。
+  4. 如果出现bug，你本可以做一些有根据的猜测，但从根本上说，代码的每一行都有嫌疑。
 
-最后一点是迄今为止最糟糕的问题，也是选择Redux的主要原因。如果您想减少应用的复杂性，最好的办法（以我的观点）是限制更改state的方式和范围。Redux并不是解决其他问题的灵丹妙药，但由于对state更改做了限制，可能会减少其他问题。
+最后一点是迄今为止最糟糕的问题，也是选择Redux的主要原因。如果您想降低应用的复杂性，最好的办法（以我的观点）是限制更改state的方式和范围。Redux并不是解决其他问题的灵丹妙药，但由于对state更改做了限制，可能会减少其他问题。
 
 
 ## Reducer
@@ -149,7 +149,7 @@ const reducer = (state = initialState, action) => {
 };
 ```
 
-如果switch语句使您感到麻烦，则不必以这种方式编写reducer。可以使用一个对象，并将每个类型的键指向其对应的处理程序，如下所示：
+如果switch语句使您感到麻烦，则不必以这种方式编写reducer。可以使用一个对象，并将每个类型的键指向其对应的handler，如下所示：
 
 ```js
 const handlers = {
@@ -200,7 +200,7 @@ const reducer = (state = initialState, action) => {
 
 实际上，如果这样改变state，Redux根本就不会起作用。因为直接更改state后，状态对象的引用不会更新，因此应用的各个部分将无法正确更新。另外也无法使用某些Redux开发人员工具，因为这些工具会跟踪以前的state。如果您一直在改变当前的state对象，则无法回到以前的state。
 
-原则上，突变状态使得从可组合的部分构建reducer(以及应用程序的其他部分)变得更加困难。纯函数是可预测的，因为当给定相同的输入时，它们产生相同的输出。如果你养成了一种直接改变state的习惯，那么一切都完了。调用函数变得不确定。你必须把整个函数树记在脑子里。
+原则上，修改状态使得构建reducer(以及应用程序的其他部分)变得更加困难。纯函数是可预测的，因为当给定相同的输入时，它们产生相同的输出。如果你养成了一种直接改变state的习惯，那么一切都完了。调用函数变得不确定。你必须把整个函数树记在脑子里。
 
 但是，这种可预测性是有代价的，特别是因为JavaScript本身并不支持不可变对象。在我们的示例中，将使用原生的JavaScript，这将增加一些额外的代码。如下是我们真正需要写这个reducer的方法：
 
@@ -242,7 +242,7 @@ const reducer = (state = initialState, action) => {
 };
 ```
 
-我在这里使用展开语法（`...`），从技术上讲，这还不是ECMAScript的一部分（ES6：现在是了），但是可以肯定的是，这是很安全的选择。如果要避免使用非标准功能，则可以使用`Object.assign`。两种方法的概念相同：请勿更改state，而是创建状态和任何嵌套对象/数组的浅表副本。对于对象的任何不变的部分，我们仅引用现有的部分。如果我们仔细看一下这段代码：
+我在这里使用展开语法（`...`），从技术上讲，这还不是ECMAScript的一部分（ES6：现在是了），但是可以肯定的是，这是很安全的选择。如果要避免使用非标准功能，则可以使用`Object.assign`。两种方法的概念相同：不要更改state，而是创建状态、任何嵌套对象、数组的浅拷贝。对于对象的任何不变的部分，我们仅引用现有的部分。如果我们仔细看一下这段代码：
 
 ```js
 return {
@@ -254,7 +254,7 @@ return {
 };
 ```
 
-我们仅更改`notes`属性，因此`state`的其他属性将保持完全相同。`...state`只是说要按原样重用那些现有属性。同样，在`notes`中，我们只更改正在编辑的一个笔记，属于`...state.notes`的其他数据将保持不变。这样我们可以利用`shouldComponentUpdate`或`PureComponent`。如果组件具有未更改的note作为props，则可以避免重新渲染。记住这一点，我们还必须避免这样编写reducer：
+我们仅更改`notes`属性，因此`state`的其他属性将保持完全相同。`...state`意思是复用那些的属性。同样，在`notes`中，我们只更改正在编辑的一个笔记，属于`...state.notes`的其他数据将保持不变。这样我们可以利用`shouldComponentUpdate`或`PureComponent`。如果组件具有未更改的note作为props，则可以避免重新渲染。记住这一点，我们还必须避免这样编写reducer：
 
 ```js
 const reducer = (state = initialState, action) => {
@@ -277,7 +277,7 @@ const reducer = (state = initialState, action) => {
 
 我们的不可变reducer绝对需要更多的思想和代码来完善。但是随着时间的推移，您会逐渐意识到状态更改功能是被隔离的并且易于测试。对于真正的应用，您可能需要使用`lodash-fp`或`Ramda`或`Immutable.js`之类的东西。在Zapier（原作者所属机构），我们使用了`immutability-helper`的变体，它非常简单。然而我仍要提醒你，这是一个很大的无底洞，我甚至开始以不同的方式来编写库。原生JS也很好，在强大的类型解决方案（例如`Flow`和`TypeScript`）中可能会更好地发挥作用。只要确保坚持使用简单的函数即可。这很像使用React做出的权衡：您可能会得到比同等jQuery解决方案更多的代码，但是每个组件的可预测性要高得多。
 
-### Using our Reducer
+### 使用我们的 Reducer
 
 让我们向reducer添加一个action，然后得到新的state
 
@@ -356,7 +356,7 @@ const state = actions.reduce(reducer, undefined);
 
 [在JSFiddle上查看](https://jsfiddle.net/justindeal/edogdh33/13/)
 
-现在您可以理解为什么Redux将自己标榜为“ JavaScript应用的可预测状态容器”。因为输入相同的一组操作，最终都拥有相同的state。函数式编程万岁！如果您听说过Redux易重播的特性，大致就是这个意思。尽管开箱即用，但Redux不会保留actions。相反，只有一个变量指向state对象，并且我们不断更改该变量以指向下一个state。 这是您的应用中允许的一个重要突变，但是我们将在`store`内部控制该突变。
+现在您可以理解为什么Redux将自己标榜为“ JavaScript应用的可预测状态容器”。因为输入相同的一组操作，最终都拥有相同的state。函数式编程万岁！如果您听说过Redux易复现之前的状态的特性，大致就是这个意思。尽管开箱即用，但Redux不会保留actions。相反，会使用一个变量指向state对象，并且不断更改该变量以指向下一个state。 这是您的应用中允许的一个重要改变，但是我们将把这种改变控制在`store`内部。
 
 ## Store
 
@@ -408,7 +408,7 @@ store.getState();
 // }
 ```
 
-在这一点上，这是相当有用的。我们拥有了一个可以使用我们提供的任何reducer来管理状态的store。 但是它仍然缺少重要的一点：一种可以订阅更改的方法。没有这些，它将需要一些笨拙的命令性代码。当我们稍后引入异步操作时，它就会无法工作。 因此，让我们继续实现订阅：
+现在我们拥有了一个可以使用我们提供的任何reducer来管理状态的store。但是它仍然缺少重要的一点：一种可以订阅更改的方法。没有这些，它将需要一些笨拙的命令性代码。当我们稍后引入异步操作时，它就会无法工作。因此，让我们继续实现订阅：
 
 ```js
 const createStore = reducer => {
@@ -436,15 +436,15 @@ const createStore = reducer => {
 };
 ```
 
-createStore中添加了更多的代码，但不会很难以理解。`subscribe`函数接受一个处理函数，并将其添加到订阅列表中。然后返回一个取消订阅的函数。任何时候我们调用`dispatch`，我们都会通知所有的处理函数。现在，每次状态改变时都可以很容易地重新渲染了。
+`createStore`中添加了更多的代码，但不会很难以理解。`subscribe`函数接受一个处理函数，并将其添加到订阅列表中。然后返回一个取消订阅的函数。任何时候我们调用`dispatch`，我们都会通知所有的处理函数。现在，每次状态改变时都可以很容易地重新渲染了。
 
 [在JSFiddle上查看](https://jsfiddle.net/justindeal/8cpu4ydj/27/)
 
-试着编辑代码并派发更多action，HTML页面将始终展现最新的store状态。当然，对于真正的应用，我们希望将这些调度功能与用户操作联系起来。我们接下来就会解决这个问题！
+试着编辑代码并派发更多action，HTML页面将始终展现最新的store状态。当然，对于真正的应用，我们希望将这些dispatch与用户的action联系起来。我们接下来就会解决这个问题！
 
 ### 添加你的组件
 
-如何让组件与Redux一起工作？只需要创建普通的React组件传递props即可。您带来了自己的state，那么就创建与该state(或部分state)一起工作的组件。有一些细微差别可能会影响后边的设计，尤其是性能方面，但在大多数情况下，死板的未优化的组件是一个很好的开始。
+如何让组件与Redux一起工作？只需要创建最简单的React组件传递props即可。您带来了自己的state，那么就创建与该state(或部分state)一起工作的组件。有一些细微差别可能会影响后边的设计，尤其是性能方面，但在大多数情况下，最简单的组件是一个很好的开始。
 
 ```js
 const NoteEditor = ({note, onChangeNote, onCloseNote}) => (
@@ -522,15 +522,15 @@ NoteApp
 
 这部分没什么可看的。我们可以将props输入这些组件并立即进行渲染。但是，让我们看一下`openNoteId`属性以及那些`onOpenNote`和`onCloseNote`回调。我们可以只使用组件state去确定该状态和这些回调的位置。没有规定说所有state都需要进入Redux存储。如果想知道何时必须存储state，只需问问自己：
 
-> 卸载此组件后该状态是否需要存在？
+> 卸载此组件后该状态是否还需要存在？
 
 如果答案是否定的，那么使用组件state就足够了。对于必须持久化保存到服务器或跨许多组件共享的状态(这些组件可能需要独立地挂载和卸载)，Redux可能是更好的选择。
 
-在某些情况下，尽管Redux处理暂态时表现良好。（暂态：例如带网络请求的action的loading和error状态）特别是，当更改store而需要更改暂态时，仅将暂态保留在store中可能会容易一些。对于我们的应用，当我们创建笔记时，我们希望将`openNoteId`设置为新的笔记ID。反映组件内部状态很麻烦，因为我们必须监视`componentWillReceiveProps`中store的更改。 这并不是说它是错误的，只是它可能很尴尬。因此，对于我们的应用，我们将用store存储`openNoteId`。
+在某些情况下，尽管Redux处理易变的状态时表现良好。（例如带网络请求的action的loading和error状态）特别是，易变的状态需要随store中的状态改变而更改时，将其保留在store中可能会容易一些。对于我们的应用，当我们创建笔记时，我们希望将`openNoteId`设置为新的笔记ID。反映组件内部状态很麻烦，因为我们必须监视`componentWillReceiveProps`中store的更改。 这并不是说它是错误的，只是它可能很笨拙。因此，对于我们的应用，我们将用store存储`openNoteId`。
 
-您需要存储暂态的另一个原因可能只是为了能够从Redux developer tools访问它。使用重放之类的东西就能轻松的查看store。而且，从局部组件state开始，然后切换到store也是非常容易的。只需确保像存储状态一样为本地状态创建容器组件就行。
+您需要存储易变状态的另一个原因可能只是为了能够从Redux开发者工具访问它。使用重放之类的功能就能轻松的查看store。而且，从组件内部state开始，再切换到store也是非常容易的。只要提供一个容器组件来将本地状态进行包装即可，就像用store来包装全局状态一样。
 
-那么，让我们调整reducer来处理这个暂态。
+那么，让我们调整reducer来处理这个易变状态。
 
 ```js
 const OPEN_NOTE = 'OPEN_NOTE';
@@ -640,17 +640,17 @@ ReactDOM.render(
 
 [在JSFiddle上查看](https://jsfiddle.net/justindeal/8bL9tL0z/23/)
 
-我们的应用程序将会派发action，这些action通过我们的reducer更新store，而我们的订阅则使视图保持同步。如果最终状态不符合预期，则不必查看所有组件，只需查看reducer和actions即可。
+我们的应用程序将会派发action，这些action通过我们的reducer更新store，同时使用订阅使视图保持同步。如果最终状态不符合预期，则不必检查所有组件，只需查看reducer和actions即可。
 
 ## Provider以及Connect
 
 好的，一切正常。 但是……还有一些问题。
 
-  1. Wiring feels imperative.（需要接线？
+  1. 绑定操作是命令式的。
   2. 容器组件中有很多重复项。
   3. 每次我们要将store连接到组件时，我们都必须使用全局store对象。否则，我们将不得不在整个树中以props传递store。或者，我们将不得不在顶层将其连接一次，然后将所有内容向下传递到树上，这在大型应用程序中可能并不好。
 
-这就是为什么我们需要React Redux的`Provider`以及`connect`的原因。首先，让我们创建一个`Provider`组件。
+这就是为什么我们需要React Redux的`Provider`以及`connect`。首先，让我们创建一个`Provider`组件。
 
 ```js
 class Provider extends React.Component {
@@ -669,7 +669,7 @@ Provider.childContextTypes = {
 };
 ```
 
-很简单，`Provider`组件使用React的上下文功能将store props转换为上下文属性。Context是一种将信息从顶级组件向下传递到子代组件的方法，而中间的组件则不必显式传递props。通常，您应该避免使用上下文，因为React文档中是这样说的：
+很简单，`Provider`组件使用React的context特性将store props转换为context属性。Context是一种将信息从顶级组件向下传递到子代组件的方法，而中间的组件则不必显式传递props。通常，您应该避免使用context，因为React文档中是这样说的：
 
 > 如果你想让你的应用程序稳定，不要使用context。这是一个实验性的API，很可能会在React的未来版本中被打破。
 
@@ -717,7 +717,7 @@ const connect = (
 }
 ```
 
-有点复杂，说实话，与实际相比已经简化了很多。(我们在最后会稍微讨论一下。)但这已经很接近了。`connect`是一个高阶组件。事实上，它是一个更高层次的部件工厂。它接受两个函数，并返回一个函数，该函数接受一个组件，并返回一个新组件。该组件订阅store，并在组件发生更改时更新组件的props。
+有点复杂，说实话，与实际相比已经偷懒了很多。但这已经很接近了。`connect`是一个高阶组件。事实上，它更像一个高阶函数。它接受两个函数，并返回一个函数，该函数接受一个组件，并返回一个新组件。该组件订阅store，并在组件发生更改时更新组件的props。
 
 ### 自动连接组件与Redux
 
@@ -753,7 +753,7 @@ const NoteAppContainer = connect(
 
 嘿，看起来好多了！
 
-传递给`connect` (`mapStateToProps`)的第一个函数从`store`中获取当前状态并返回一些props。传递给`connect` (`mapDispatchToProps`)的第二个函数接受`store`的`dispatch`方法，并返回更多的props。这会返回一个新函数，我们把组件传递给这个函数，就会返回一个新组件，它将自动获得所有映射好的props(加上我们传入的任何额外props)。现在我们只需要使用我们的`Provider`组件，以便`connect`可以从上下文中获取存储。
+传递给`connect`的第一个函数(`mapStateToProps`)从`store`中获取当前状态并返回一些props。传递给`connect`的第二个函数(`mapDispatchToProps`)接受`store`的`dispatch`方法，并返回更多的props。这会返回一个新函数，我们把组件传递给这个函数，就会返回一个新组件，它将自动获得所有映射好的props(加上我们传入的任何额外props)。现在我们只需要使用我们的`Provider`组件，以便`connect`可以从上下文中获取存储。
 
 ```js
 ReactDOM.render(
@@ -770,15 +770,16 @@ ReactDOM.render(
 
 ## Middleware 中间件
 
-现在我们已经建立了一些非常有用的东西，但还有一处很大的缺陷。某些情况下，我们希望与服务器进行对话。但现在我们的操作都是同步的，如何进行异步操作呢？我们可以从组件中获取远程数据，但仍有一些问题：
-  1. Redux（除了`Provicer`和`connect`）并不是特定于React的。如果能有一个Redux自己的解决方案就好了。
-  2. 有时在获取数据时需要访问state。 我们不想在任何地方都绕过state。因此，我们最终不得不构建诸如`connect`之类的东西来进行数据提取。
+现在我们已经建立了一些非常有用的东西，但还有一处很大的缺陷。某些情况下，我们希望与服务器进行通信。但现在我们的操作都是同步的，如何进行异步操作呢？我们可以从组件中获取远程数据，但仍有一些问题：
+
+  1. Redux（除了`Provider`和`connect`）并不是特定于React的。如果能有一个Redux自己的解决方案就好了。
+  2. 有时在获取数据时需要访问state。 我们不想在任何地方都传递state。因此，我们最终不得不构建诸如`connect`之类的东西来进行数据获取。
   3. 目前情况下，如果不使用组件，就无法测试涉及数据获取的state更改。如果我们可以独立的获取数据，这会更有利于测试。
-  4. 最后，我们将失去一些工具化的好处。
+  4. 最后，又有一些工具不能用了。
 
-既然Redux是同步的，这该如何实现呢？我们通过在dispatch的中途放置一些东西并更改store state。这个东西就是中间件。
+既然Redux是同步的，这该如何实现呢？我们通过在dispatch和更改store状态的中途放置一些东西。这就是中间件。
 
-我们需要一种将中间件传递到store的方法，让我们开始吧。
+首先我们需要一种将中间件传递到store的方法。
 
 ```js
 const createStore = (reducer, middleware) => {
@@ -827,11 +828,11 @@ if (middleware) {
 }
 ```
 
-我们创建了一个将“重新派发”的函数。
+我们创建了一个将“重新派发action”的函数。
 
 `const dispatch = action => store.dispatch(action);`
 
-如果一个中间件决定dispatch一个新的action，这个新的action会通过中间件返回。我们必须创建这个函数以更改store的dispatch函数。这是另一个突变让事情变得更容易的地方。只要Redux有助于执行规则，它就可以打破规则。: -)
+如果一个中间件决定dispatch一个新的action，这个新的action会通过中间件传递下去。我们必须创建这个函数以更改store的dispatch函数。（这是另一个可变对象让事情变得更容易的地方。我们开发Redux时可以破坏规则，只要它能够帮助开发者遵守规则。: -)）
 
 ```js
 store.dispatch = middleware({
@@ -840,7 +841,7 @@ store.dispatch = middleware({
 })(coreDispatch);
 ```
 
-这里调用了中间件，并向其传递一个对象，该对象可以访问我们的“重新派发”功能以及我们的`getState`函数。中间件将返回一个新功能，该功能可以调用下一个dispatch，在当前情况下，该功能只是原始的dispatch。 如果您感觉有些混乱，请不要担心，创建和使用中间件实际上很容易。
+这里调用了中间件，并向其传递一个对象，该对象可以访问我们的“重新派发”函数以及我们的`getState`函数。中间件将返回一个新函数，该函数可以调用下一个dispatch，在当前情况下，该函数只是原始的dispatch。 如果您感觉有些混乱，请不要担心，创建和使用中间件实际上很容易。
 
 好的，让我们创建一个中间件来延迟dispatch一秒钟。没什么用，但它能展示异步操作。
 
@@ -852,7 +853,7 @@ const delayMiddleware = () => next => action => {
 };
 ```
 
-这个例子看起来超级傻，但它符合我们之前创造的谜题。它是一个函数，返回一个函数，该函数接受下一个dispatch函数。“下一个”函数执行操作。好吧，看起来Redux的箭头函数有点疯狂，但是有一个原因，我们很快就会指出来。现在，让我们在store中引入中间件。
+这个例子看起来超级傻，但它符合我们之前创造的蓝图。它是一个函数，返回一个函数，该函数接受下一个dispatch函数。“下一个”函数执行操作。好吧，看起来Redux的箭头函数有点疯狂，但是有一个原因，我们很快就会说明。现在，让我们在store中引入中间件。
 
 `const store = createStore(reducer, delayMiddleware);`
 
@@ -862,7 +863,7 @@ const delayMiddleware = () => next => action => {
 
 ### 连接多个中间件
 
-现在让我们创建另一个(更有用的)日志中间件。
+现在让我们创建另一个更有用的日志中间件。
 
 ```js
 const loggingMiddleware = ({getState}) => next => action => {
@@ -893,7 +894,7 @@ const applyMiddleware = (...middlewares) => store => {
 };
 ```
 
-首先要注意的是，它接受一组中间件并返回一个中间件函数。这个新的中间件函数与之前的中间件具有相同的结构。它接受一个store(实际上只是我们的re-`dispatch`和`getState`方法，而不是整个store)并返回另一个函数。对于这个函数：
+首先要注意的是，它接受一组中间件并返回一个中间件函数。这个新的中间件函数与之前的中间件具有相同的结构。它接受一个store(实际上只是我们的重新派发action的`dispatch`和`getState`方法，而不是整个store)并返回另一个函数。对于这个函数：
 
   1. 如果没有传入中间件，则返回原本的dispatch函数。 基本上，只是一个无操作中间件。这很愚蠢，但只是在阻止特殊情况。
   2. 如果我们有一个中间件函数，我们返回那个中间件函数。同样，只是在阻止特殊情况。
@@ -1036,7 +1037,7 @@ const mapDispatchToProps = dispatch => ({
 
 [在JSFiddle上查看](https://jsfiddle.net/justindeal/o27j5zs1/8/)
 
-但是等等，除了我们在组件中丢弃的一些丑陋的代码外，我们还发明了中间件来去除这些代码。但现在我们把它又放回去了。如果我们使用一些自定义api中间件而不是使用thunk，我们就可以摆脱它。但即使使用了thunk中间件，我们仍然可以让各部分代码更有条理。
+但是等等，除了我们在组件中添加的一些丑陋的代码外，我们还发明了中间件来去除这些代码。但现在我们把它又放回去了。如果我们使用一些自定义api中间件而不是使用thunk，我们就可以摆脱它。但即使使用了thunk中间件，我们仍然可以让各部分代码更有条理。
 
 ## Action Creators
 
